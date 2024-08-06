@@ -1,0 +1,21 @@
+all:
+  children:
+    Orchestrators:
+      hosts:
+        localhost:
+          ansible_connection: local
+          ansible_user: loprych
+
+    Endpoints:
+      hosts:
+        ansible-target-alma:
+          ansible_host: ansible-target-alma
+          ansible_user: alma
+          ansible_ssh_private_key_file: ~/.ssh/id_ed25519
+          ansible_become: true
+
+        ansible-target-rocky:
+          ansible_host: ansible-target-rocky
+          ansible_user: rocky
+          ansible_ssh_private_key_file: ~/.ssh/id_ed25519
+          ansible_become: true

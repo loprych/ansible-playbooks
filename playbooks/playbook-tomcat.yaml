@@ -1,0 +1,111 @@
+---
+- name: Install Tomcat 8.5.100
+  hosts: Endpoints
+  become: true
+  tasks:
+    - name: Ensure packages are up-to-date
+      ansible.builtin.dnf:
+        name: "*"
+        state: latest
+
+    - name: Copy tomcat binary from controller to target
+      ansible.builtin.copy:
+        src: /home/loprych/devops/ansible/packages/apache-tomcat-8.5.100.tar.gz
+        dest: /tmp/apache-tomcat-8.5.100.tar.gz
+
+    - name: Extract tomcat binary
+      ansible.builtin.unarchive:
+        src: /tmp/apache-tomcat-8.5.100.tar.gz
+        dest: /opt/
+        remote_src: yes
+
+    - name: Create a symbolic link to tomcat
+      ansible.builtin.file:
+        src: /opt/apache-tomcat-8.5.100
+        dest: /opt/tomcat
+        state: link
+
+    - name: Ensure tomcat user exists
+      ansible.builtin.user:
+        name: tomcat
+        state: present
+        shell: /bin/false
+
+    - name: Change ownership of tomcat directory
+      ansible.builtin.file:
+        path: /opt/tomcat
+        state: directory
+        owner: tomcat
+        group: tomcat
+        recurse: yes
+
+    - name: Create systemd service file for tomcat
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/tomcat.service
+        content: |
+          [Unit]
+          Description=Apache Tomcat Web Application Container
+          After=network.target
+
+          [Service]
+          Type=forking
+          User=tomcat
+          Group=tomcat
+          Environment="JAVA_HOME=/usr/lib/jvm/jdk-11.0.9.1+1"
+          Environment="CATALINA_PID=/opt/tomcat/temp/tomcat.pid"
+          Environment="CATALINA_HOME=/opt/tomcat"
+          Environment="CATALINA_BASE=/opt/tomcat"
+          Environment="CATALINA_OPTS=-Xms512M -Xmx1024M -server -XX:+UseParallelGC"
+          Environment="JAVA_OPTS=-Djava.awt.headless=true -Djava.security.egd=file:/dev/./urandom"
+
+          ExecStart=/opt/tomcat/bin/startup.sh
+          ExecStop=/opt/tomcat/bin/shutdown.sh
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Ensure systemd service file is not duplicated (JAVA_HOME)
+      ansible.builtin.lineinfile:
+        path: /etc/systemd/system/tomcat.service
+        line: 'Environment="JAVA_HOME=/usr/lib/jvm/jdk-11.0.9.1+1"'
+        state: present
+        create: yes
+
+    - name: Ensure systemd service file is not duplicated (CATALINA_PID)
+      ansible.builtin.lineinfile:
+        path: /etc/systemd/system/tomcat.service
+        line: 'Environment="CATALINA_PID=/opt/tomcat/temp/tomcat.pid"'
+        state: present
+        create: yes
+
+    - name: Ensure systemd service file is not duplicated (CATALINA_HOME)
+      ansible.builtin.lineinfile:
+        path: /etc/systemd/system/tomcat.service
+        line: 'Environment="CATALINA_HOME=/opt/tomcat"'
+        state: present
+        create: yes
+
+    - name: Ensure systemd service file is not duplicated (CATALINA_BASE)
+      ansible.builtin.lineinfile:
+        path: /etc/systemd/system/tomcat.service
+        line: 'Environment="CATALINA_BASE=/opt/tomcat"'
+        state: present
+        create: yes
+
+    - name: Ensure systemd service file is not duplicated (CATALINA_OPTS)
+      ansible.builtin.lineinfile:
+        path: /etc/systemd/system/tomcat.service
+        line: 'Environment="CATALINA_OPTS=-Xms512M -Xmx1024M -server -XX:+UseParallelGC"'
+        state: present
+        create: yes
+
+    - name: Ensure systemd service file is not duplicated (JAVA_OPTS)
+      ansible.builtin.lineinfile:
+        path: /etc/systemd/system/tomcat.service
+        line: 'Environment="JAVA_OPTS=-Djava.awt.headless=true -Djava.security.egd=file:/dev/./urandom"'
+        state: present
+        create: yes
+
+    - name: Reload systemd daemon
+      ansible.builtin.systemd:
+        daemon_reload: yes

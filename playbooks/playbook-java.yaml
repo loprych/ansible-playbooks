@@ -1,0 +1,74 @@
+---
+- name: Update packages on target systems and install Java
+  hosts: Endpoints
+  become: true
+  tasks:
+    - name: Ensure packages are up-to-date
+      ansible.builtin.dnf:
+        name: "*"
+        state: latest
+
+    - name: Install tar, gzip, and mc
+      ansible.builtin.dnf:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - tar
+        - gzip
+        - mc
+
+    - name: Download JDK 11 binary (if not already present)
+      ansible.builtin.get_url:
+        url: "https://github.com/AdoptOpenJDK/openjdk11-binaries/releases/download/jdk-11.0.9.1%2B1/OpenJDK11U-jdk_x64_linux_hotspot_11.0.9.1_1.tar.gz"
+        dest: "/tmp/OpenJDK11U-jdk_x64_linux_hotspot_11.0.9.1_1.tar.gz"
+      register: jdk_download
+      changed_when: jdk_download.changed
+
+    - name: Ensure JDK directory exists
+      ansible.builtin.file:
+        path: "/usr/lib/jvm"
+        state: directory
+
+    - name: Extract JDK 11 archive
+      ansible.builtin.unarchive:
+        src: "/tmp/OpenJDK11U-jdk_x64_linux_hotspot_11.0.9.1_1.tar.gz"
+        dest: "/usr/lib/jvm"
+        remote_src: yes
+        creates: "/usr/lib/jvm/jdk-11.0.9.1+1"
+
+    - name: Set JAVA_HOME environment variable
+      ansible.builtin.lineinfile:
+        path: "/etc/environment"
+        line: "JAVA_HOME=/usr/lib/jvm/jdk-11.0.9.1+1"
+        state: present
+
+- name: Install Java as non-administrative user
+  hosts: Endpoints
+  remote_user: zenek
+  tasks:
+    - name: Add JAVA_HOME to PATH in .bashrc
+      ansible.builtin.lineinfile:
+        path: "/home/zenek/.bashrc"
+        line: 'export PATH=$PATH:$JAVA_HOME/bin'
+        state: present
+        insertafter: EOF
+        regexp: '^export PATH=.*$JAVA_HOME/bin'
+
+    - name: Source .bashrc to apply changes immediately
+      ansible.builtin.shell:
+        cmd: source /home/zenek/.bashrc
+        executable: /bin/bash
+        chdir: /home/zenek
+        creates: /usr/lib/jvm/jdk-11.0.9.1+1/bin/java  
+        
+    - name: Run java -version command
+      ansible.builtin.shell: |
+       source /home/zenek/.bashrc && java -version 2>&1
+      register: java_version_output
+      ignore_errors: true
+      become_user: 'zenek'
+    
+    - name: Display Java -version info
+      ansible.builtin.debug:
+         msg: "{{ java_version_output.stdout }}"
+      when: java_version_output.rc == 0
